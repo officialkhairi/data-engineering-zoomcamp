@@ -6,7 +6,8 @@ import pandas as pd
 from sqlalchemy import create_engine
 from tqdm.auto import tqdm
 
-dtype = {
+# Yellow taxi CSV schema hints
+yellow_dtype = {
     "VendorID": "Int64",
     "passenger_count": "Int64",
     "trip_distance": "float64",
@@ -25,53 +26,40 @@ dtype = {
     "congestion_surcharge": "float64"
 }
 
-parse_dates = [
+yellow_parse_dates = [
     "tpep_pickup_datetime",
     "tpep_dropoff_datetime"
 ]
 
 
-def ingest_data(
-        url: str,
-        engine,
-        target_table: str,
-        chunksize: int = 100000,
-) -> pd.DataFrame:
-    df_iter = pd.read_csv(
-        url,
-        dtype=dtype,
-        parse_dates=parse_dates,
-        iterator=True,
-        chunksize=chunksize
-    )
-
-    first_chunk = next(df_iter)
-
-    first_chunk.head(0).to_sql(
-        name=target_table,
-        con=engine,
-        if_exists="replace"
-    )
-
-    print(f"Table {target_table} created")
-
-    first_chunk.to_sql(
-        name=target_table,
-        con=engine,
-        if_exists="append"
-    )
-
-    print(f"Inserted first chunk: {len(first_chunk)}")
-
-    for df_chunk in tqdm(df_iter):
-        df_chunk.to_sql(
-            name=target_table,
-            con=engine,
-            if_exists="append"
+def ingest_data(url: str, engine, target_table: str, chunksize: int = 100000, dtype=None, parse_dates=False):
+    if url.endswith('.parquet'):
+        df = pd.read_parquet(url)
+        df.head(0).to_sql(name=target_table, con=engine, if_exists="replace")
+        print(f"Table {target_table} created")
+        for i in range(0, len(df), chunksize):
+            chunk = df.iloc[i:i + chunksize]
+            chunk.to_sql(name=target_table, con=engine, if_exists="append")
+            print(f"Inserted chunk: {len(chunk)}")
+    else:
+        df_iter = pd.read_csv(
+            url,
+            dtype=dtype,
+            parse_dates=parse_dates,
+            iterator=True,
+            chunksize=chunksize
         )
-        print(f"Inserted chunk: {len(df_chunk)}")
+        first_chunk = next(df_iter)
+        first_chunk.head(0).to_sql(name=target_table, con=engine, if_exists="replace")
+        print(f"Table {target_table} created")
+        first_chunk.to_sql(name=target_table, con=engine, if_exists="append")
+        print(f"Inserted first chunk: {len(first_chunk)}")
+        for df_chunk in tqdm(df_iter):
+            df_chunk.to_sql(name=target_table, con=engine, if_exists="append")
+            print(f"Inserted chunk: {len(df_chunk)}")
 
-    print(f'done ingesting to {target_table}')
+    print(f"Done ingesting to {target_table}")
+
 
 @click.command()
 @click.option('--pg-user', default='root', show_default=True, help='Postgres user')
@@ -79,22 +67,22 @@ def ingest_data(
 @click.option('--pg-host', default='localhost', show_default=True, help='Postgres host')
 @click.option('--pg-port', default='5432', show_default=True, help='Postgres port')
 @click.option('--pg-db', default='ny_taxi', show_default=True, help='Postgres database name')
-@click.option('--year', default=2021, show_default=True, type=int, help='Year of the trip data')
-@click.option('--month', default=1, show_default=True, type=int, help='Month of the trip data')
+@click.option('--url', default=None, help='Direct URL to the data file (parquet or csv/csv.gz)')
+@click.option('--year', default=2021, show_default=True, type=int, help='Year (used when --url is not set)')
+@click.option('--month', default=1, show_default=True, type=int, help='Month (used when --url is not set)')
 @click.option('--chunksize', default=100000, show_default=True, type=int, help='Number of rows per chunk')
 @click.option('--target-table', default='yellow_taxi_data', show_default=True, help='Target table name')
-def main(pg_user, pg_pass, pg_host, pg_port, pg_db, year, month, chunksize, target_table):
+def main(pg_user, pg_pass, pg_host, pg_port, pg_db, url, year, month, chunksize, target_table):
     engine = create_engine(f'postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}')
-    url_prefix = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow'
 
-    url = f'{url_prefix}/yellow_tripdata_{year:04d}-{month:02d}.csv.gz'
+    if url is None:
+        url_prefix = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow'
+        url = f'{url_prefix}/yellow_tripdata_{year:04d}-{month:02d}.csv.gz'
+        ingest_data(url=url, engine=engine, target_table=target_table, chunksize=chunksize,
+                    dtype=yellow_dtype, parse_dates=yellow_parse_dates)
+    else:
+        ingest_data(url=url, engine=engine, target_table=target_table, chunksize=chunksize)
 
-    ingest_data(
-        url=url,
-        engine=engine,
-        target_table=target_table,
-        chunksize=chunksize
-    )
 
 if __name__ == '__main__':
     main()
