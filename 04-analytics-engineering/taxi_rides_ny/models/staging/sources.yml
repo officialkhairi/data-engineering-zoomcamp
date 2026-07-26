@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw_data
+    description: "Raw data sources for NYC taxi rides"
+    # database: celtic-truck-199702 # Name of your GCP project
+    # schema: zoomcamp # Name of your BigQuery dataset
+    database: taxi_rides_ny
+    schema: prod
+    tables:
+      - name: green_tripdata
+      - name: yellow_tripdata

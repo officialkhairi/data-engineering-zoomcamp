@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/04-analytics-engineering/.venv/bin/python",
+  "cSpell.words": [
+    "tripdata"
+  ],
+  "dbt.perspectiveTheme": "Vintage"
+}
