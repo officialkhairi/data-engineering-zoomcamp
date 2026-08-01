@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.ipynb_checkpoints/
 
 # dbt / DuckDB
 *.duckdb
@@ -17,6 +18,10 @@ logs/
 # Data
 data/
 *.parquet
+05-batch-processing/*.csv
+05-batch-processing/*.csv.gz
+05-batch-processing/zones/
+05-batch-processing/fhvhv/
 
 # Env / secrets
 .env
